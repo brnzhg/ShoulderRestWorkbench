@@ -12,10 +12,23 @@ The usual loop: the player prints a version, tries it, and reports back. You rec
    - Shape feedback becomes `--set` overrides of rest parameters, such as cap angles, head widths and outline strokes.
    - Small steps: about 1 to 3 mm and 1 to 3 degrees, unless the player asks for more.
 3. **Build and inspect.** Run `srw build`, then look at `builds/<id>/fit.png` and `rest.png` and run `srw compare <parent> <id>`. Check that the change reads as intended and nothing else moved. When fillets, caps or stripes fail at a new pose, adjust them in the same version and say so in `notes`. Never loosen a library validation to make a version build.
-4. **Slice** with `srw slice <id>` (add `--parts legs` only when the player wants new legs). Report print time and grams. Do not start a print or send files to the printer. The player opens the slice with `srw open <id>` and sends it.
-5. **Commit** the version file, and any feedback edits, as you go.
+4. **Slice** with `srw slice <id>` (add `--parts legs` only when the player wants new legs). Report print time and grams.
+5. **Print** only when the player asked for this version to be printed, or said that you may print what you make. See "Printing" below.
+6. **Commit** the version file, and any feedback edits, as you go.
 
 To find where to look next, use `srw table --varying` (one row per version: parameters, rest pose on the shoulder, scores) and `srw diff`. Lineage matters: compare a version with its parent before comparing it with distant relatives.
+
+## Printing
+
+The printer may be unattended, so check before starting, then follow the print.
+
+1. `srw printer status`: the printer is idle with no errors.
+2. `srw printer snapshot`, then look at the image. Print only if the build plate is on the bed and empty. A previous print, scraps or tools on the plate mean stop and tell the player.
+3. `srw print <id> --dry-run`, then `srw print <id>`. If a check fails, report it. Do not work around it with `--spool` unless the player named a spool.
+4. Run `srw printer watch` in the background and look at `builds/printer/latest.jpg` as frames arrive. Check most closely around the first layer, about 10 minutes in. Spaghetti, a part loose or knocked over, an empty plate partway through, or a blob growing on the nozzle are failures. Then run `srw printer pause` and tell the player. Run `srw printer stop` only when the player says so, or when the print is plainly ruined and continuing risks the printer.
+5. When the watch exits, report the outcome. It is already written on the print record; add what you saw in `notes`.
+
+Never send raw G-code, change temperatures or move axes, and never change the printer's settings or firmware. Those need someone at the printer.
 
 ## Changing code
 

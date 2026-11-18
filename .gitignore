@@ -12,3 +12,6 @@ builds/
 .vscode/
 .idea/
 .DS_Store
+
+# Machine-local printer connection (host, serial, access code)
+printer.local.toml

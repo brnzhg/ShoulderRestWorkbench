@@ -17,7 +17,7 @@ A version file holds:
 import datetime
 import re
 import tomllib
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
@@ -216,6 +216,19 @@ def record_print(version_id: str, record: Table) -> None:
         entry[key] = value
     prints.append(entry)
     version.path.write_text(tomlkit.dumps(document))
+
+
+def update_print(version_id: str, match: Callable[[Table], bool], updates: Table) -> bool:
+    """Set ``updates`` on the latest ``[[prints]]`` entry ``match`` accepts; False if none does."""
+    version = load(version_id)
+    document = tomlkit.parse(version.path.read_text())
+    for entry in reversed(document.get("prints", [])):
+        if match(dict(entry)):
+            for key, value in updates.items():
+                entry[key] = value
+            version.path.write_text(tomlkit.dumps(document))
+            return True
+    return False
 
 
 def parse_assignment(text: str) -> Table:

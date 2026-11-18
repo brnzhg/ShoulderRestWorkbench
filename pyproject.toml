@@ -5,6 +5,7 @@ description = "Build, slice and track versions of a personal shoulder rest"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "paho-mqtt>=2.1",
     "shoulder-rest[render]",
     "tomlkit>=0.13.2",
 ]

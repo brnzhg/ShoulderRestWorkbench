@@ -61,8 +61,8 @@ srw build v003                             # builds/v003/: rest.stl, fit.png, re
 srw compare v002 v003                      # overlay in v002's frame, v002 ghosted
 srw diff v002 v003                         # parameter changes and the rest's move
 srw slice v003                             # --parts rest,legs; --profile petg-rest
-srw open v003                              # Bambu Studio, to check and send to the printer
-srw printed v003 --material "PETG Basic, black"
+srw print v003                             # start it on the printer (or srw open, then Print)
+srw printed v003 --material "PETG Basic, black"   # record a print started by hand
 srw table --varying -o builds/dataset.csv  # every version: parameters, pose, scores
 ```
 
@@ -72,9 +72,34 @@ srw table --varying -o builds/dataset.csv  # every version: parameters, pose, sc
 
 Slicing calls the Bambu Studio command line directly. It is already installed, matches the presets I print with in the GUI, and writes Bambu `.gcode.3mf` files the P1S prints as-is. The command line ignores preset inheritance, so the workbench flattens presets first and then checks every override against the sliced project's settings, which catches misspelled keys. Each slice records the Bambu Studio version that made it.
 
-OrcaSlicer (alone or through [estampo](https://github.com/estampo/estampo), which runs it in Docker) would add little here and makes sending harder. Bambu's current firmware only takes jobs from third-party slicers through Bambu Connect, which has no Linux build, or in LAN-only Developer Mode, which cuts the printer off from Bambu's cloud. Bambu Studio sends natively.
+OrcaSlicer (alone or through [estampo](https://github.com/estampo/estampo), which runs it in Docker) would add little here: `srw print` sends jobs itself, and Bambu Studio can still open a slice to check it (`srw open`).
 
-Sending is one click: `srw open` loads the slice in Bambu Studio, where the printer is already set up. Fully automatic sending would need LAN-only Developer Mode and a library such as `bambulabs_api`.
+## Printing
+
+`srw print` sends the latest slice of a version to the printer over the LAN and starts it, so agents can run prints while I'm away. Starting, pausing and stopping need the printer in **LAN-only Developer Mode** (on the printer: Settings > Network > LAN Only, then Developer Mode). Current firmware ignores unsigned control commands from anything but Bambu's apps otherwise. That mode cuts the printer off from Bambu's cloud and Bambu Handy; Bambu Studio still reaches it on the LAN. Status, the camera and uploads work in either mode.
+
+```sh
+srw printer status                 # state, progress, temperatures, loaded spools, errors
+srw printer snapshot               # camera frame to builds/printer/ (turns on the chamber light)
+srw print v003 --dry-run           # every check, nothing sent
+srw print v003                     # upload, start, record the print in versions/v003.toml
+srw printer watch                  # follow the job; frames in builds/printer/<job>/, latest.jpg
+srw printer pause|resume|stop
+```
+
+Before starting, `srw print` checks that the slice matches the current build, the printer is idle with no error or serious HMS alert, the nozzle diameter matches, and a loaded spool holds the slice's filament type. AMS slots are preferred. `--spool N` picks an `ams_mapping` slot instead (4 × unit + tray, from 0; 254 is the external spool). It cannot tell whether the build plate is empty and in place, so look at a snapshot first.
+
+`srw printer watch` exits 0 when the print finishes, 1 when it fails, 3 when it pauses (filament runout, an error or a manual pause) and 4 when nothing is printing. When it ends, it writes `outcome` and `ended` on the print's record.
+
+The printer is found by its LAN discovery broadcast, and the access code comes from Bambu Studio's saved settings. To pin them instead, create `printer.local.toml` (ignored by git) or set the matching `BAMBU_*` environment variables:
+
+```toml
+host = "192.168.1.50"
+serial = "01P00..."
+access_code = "..."   # Settings > Network on the printer
+```
+
+Job options (calibration, timelapse, default spools) are under `[printer]` in `workbench.toml`.
 
 ## Changing the library
 

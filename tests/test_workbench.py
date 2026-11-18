@@ -5,7 +5,9 @@ import os
 import shutil
 import tempfile
 import unittest
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from build123d import Location, Pos, Rotation, Vector
 
@@ -168,6 +170,22 @@ class VersionTests(unittest.TestCase):
         text = (self.root / "versions" / "v001.toml").read_text()
         self.assertIn("# Fitted angles", text)
         self.assertEqual(tomllib.loads(text)["prints"][0]["feedback"], "Digs in at the front")
+
+    def test_update_print_sets_outcome_on_matching_record(self) -> None:
+        import tomllib
+
+        from rest_workbench import versions
+
+        for job in ("v001-rest", "v001-legs"):
+            versions.record_print("v001", {"printer_job": job, "outcome": "started"})
+
+        def started(job: str) -> Callable[[dict[str, Any]], bool]:
+            return lambda r: r.get("printer_job") == job and r.get("outcome") == "started"
+
+        self.assertTrue(versions.update_print("v001", started("v001-rest"), {"outcome": "finished"}))
+        self.assertFalse(versions.update_print("v001", started("v001-rest"), {"outcome": "failed"}))
+        prints = tomllib.loads((self.root / "versions" / "v001.toml").read_text())["prints"]
+        self.assertEqual([p["outcome"] for p in prints], ["finished", "started"])
 
     def test_parse_assignment(self) -> None:
         from rest_workbench.versions import parse_assignment

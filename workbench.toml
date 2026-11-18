@@ -11,3 +11,15 @@ profiles = "~/.var/app/com.bambulab.BambuStudio/config/BambuStudio/system/BBL"
 # Default slicer profile (slicer/<name>.toml) for each printable group.
 rest = "petg-rest"
 legs = "petg-legs"
+
+[printer]
+# Printing from srw over the LAN (LAN-only Developer Mode). Host, serial and
+# access code are machine-local: printer.local.toml (ignored by git) or
+# BAMBU_HOST, BAMBU_SERIAL, BAMBU_ACCESS_CODE. Without them the printer is found
+# by its discovery broadcast and Bambu Studio's saved access code is used.
+spools = "auto"                     # match slice filament types to loaded spools, or ams_mapping slots
+file_url = "file:///sdcard/{file}"  # where P1 and X1 firmware find uploaded jobs
+bed_leveling = true
+flow_calibration = true
+vibration_calibration = true
+timelapse = false

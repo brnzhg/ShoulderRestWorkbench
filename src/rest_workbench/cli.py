@@ -4,6 +4,7 @@ import argparse
 import datetime
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -143,29 +144,167 @@ def cmd_open(args: argparse.Namespace) -> None:
     print(f"Opening {result.output} in Bambu Studio")
 
 
-def cmd_printed(args: argparse.Namespace) -> None:
+def _print_record(version: str, parts: list[str], date: datetime.date) -> Table:
+    """A ``[[prints]]`` entry with the build's commits and the slices printed."""
     from .build import existing
     from .slicing import latest_slice
 
-    built = existing(args.version)
-    record: Table = {"date": datetime.date.fromisoformat(args.date) if args.date else datetime.date.today()}
-    record["parts"] = args.parts.split(",")
+    built = existing(version)
+    record: Table = {"date": date, "parts": parts}
     if built is not None:
         provenance = built.manifest["provenance"]
         record["library_commit"] = provenance["library"]["commit"][:12]
         record["workbench_commit"] = provenance["workbench"]["commit"][:12]
-        slices = [latest_slice(built, part) for part in record["parts"]]
-        found = [s for s in slices if s is not None]
+        found = [s for s in (latest_slice(built, part) for part in parts) if s is not None]
         if found:
             record["slicer_profiles"] = [s.profile for s in found]
             record["gcode_sha256"] = [s.summary["sha256"][:16] for s in found]
             record["filament_g"] = round(sum(s.summary["filament_g"] for s in found), 1)
             record["slicer_version"] = found[0].summary.get("slicer_version", "unknown")
+    return record
+
+
+def cmd_printed(args: argparse.Namespace) -> None:
+    date = datetime.date.fromisoformat(args.date) if args.date else datetime.date.today()
+    record = _print_record(args.version, args.parts.split(","), date)
     if args.material:
         record["material"] = args.material
     record["feedback"] = args.feedback or ""
     versions.record_print(args.version, record)
     print(f"Recorded a print of {args.version}; add feedback and [prints.scores] in its file")
+
+
+def cmd_print(args: argparse.Namespace) -> None:
+    from . import printer
+    from .build import existing
+    from .slicing import latest_slice
+
+    built = existing(args.version)
+    sliced = latest_slice(built, args.part) if built else None
+    if sliced is None:
+        sys.exit(f"No current slice of {args.version} {args.part}; run srw slice first")
+    job = printer.JobSettings.load()
+    facts = printer.slice_facts(sliced.output)
+    with printer.session() as session:
+        checked = printer.plan(session.report, facts, args.spool or job.spools)
+        for warning in checked.warnings:
+            print(f"warning: {warning}")
+        if checked.problems:
+            sys.exit("Not printing:\n  " + "\n  ".join(checked.problems))
+        s = sliced.summary
+        print(f"{sliced.output.name}: {s['print_minutes']} min, {s['filament_g']} g of {checked.material}")
+        if args.dry_run:
+            print("Dry run: checks passed, nothing sent")
+            return
+        report = printer.start_print(session, sliced.output, sliced.output.name, job, checked.mapping)
+    print(f"Started: printer is {report.get('gcode_state')}")
+    record = _print_record(args.version, [args.part], datetime.date.today())
+    record["started"] = datetime.datetime.now().replace(microsecond=0)
+    record["printer_job"] = sliced.output.name.removesuffix(".gcode.3mf")
+    record["material"] = checked.material
+    record["outcome"] = "started"
+    record["feedback"] = ""
+    versions.record_print(args.version, record)
+    print(f"Recorded the print in {args.version}; follow it with srw printer watch")
+
+
+def _save_snapshot(conn: Any, output: Path) -> Path:
+    from . import printer
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(printer.snapshot(conn))
+    return output
+
+
+def cmd_printer(args: argparse.Namespace) -> None:
+    from . import paths, printer
+
+    if args.action == "discover":
+        found = printer.discover(args.timeout)
+        for p in found:
+            print(f"{p.name} {p.model} serial {p.serial} at {p.host}, firmware {p.firmware}, mode {p.mode}")
+        if not found:
+            print("No printer announced itself")
+        return
+    with printer.session() as session:
+        if args.action == "status":
+            summary = printer.summarize(session.report)
+            print(json.dumps(summary, indent=1) if args.json else "\n".join(printer.status_lines(summary)))
+        elif args.action == "snapshot":
+            if args.light and printer.summarize(session.report)["lights"].get("chamber_light") != "on":
+                session.set_light(True)
+                time.sleep(3)
+            stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            output = args.output or paths.builds_dir() / "printer" / f"snapshot-{stamp}.jpg"
+            print(f"Wrote {_save_snapshot(session.conn, output)}")
+        elif args.action in ("pause", "resume", "stop"):
+            session.command(args.action)
+            wanted = {"pause": {"PAUSE"}, "resume": {"RUNNING", "PREPARE"}, "stop": {"FAILED", "IDLE", "FINISH"}}
+            report = session.wait_for(lambda r: r.get("gcode_state") in wanted[args.action], 30)
+            if report is None:
+                sys.exit(f"Printer did not {args.action} within 30 s; is it in LAN-only Developer Mode?")
+            print(f"Printer is {report['gcode_state']}")
+        elif args.action == "light":
+            session.set_light(args.state == "on")
+            print(f"Chamber light {args.state}")
+        elif args.action == "watch":
+            sys.exit(_watch(session, args))
+
+
+def _watch(session: Any, args: argparse.Namespace) -> int:
+    """Follow the current job until it ends; 0 finished, 1 failed, 3 paused, 4 nothing printing."""
+    from . import paths, printer
+
+    report = session.report
+    if report.get("gcode_state") not in printer.ACTIVE_STATES:
+        print("\n".join(printer.status_lines(printer.summarize(report))))
+        print("Nothing is printing")
+        return 4
+    job = str(report.get("subtask_name") or "job")
+    folder = paths.builds_dir() / "printer" / job
+    deadline = time.monotonic() + args.timeout * 3600
+    next_snapshot = time.monotonic()
+    while True:
+        state = report.get("gcode_state")
+        summary = printer.summarize(report)
+        stamp = datetime.datetime.now().strftime("%H:%M")
+        print(f"{stamp} {'; '.join(printer.status_lines(summary)[:2])}", flush=True)
+        if args.snapshot_every and (time.monotonic() >= next_snapshot or state not in ("RUNNING", "PREPARE")):
+            try:
+                path = _save_snapshot(session.conn, folder / f"{datetime.datetime.now():%Y%m%d-%H%M%S}.jpg")
+                (folder.parent / "latest.jpg").write_bytes(path.read_bytes())
+            except RuntimeError as error:
+                print(f"snapshot failed: {error}")
+            next_snapshot = time.monotonic() + args.snapshot_every * 60
+        if state in ("FINISH", "FAILED", "IDLE"):
+            outcome = "finished" if state == "FINISH" else "failed"
+            _record_outcome(job, outcome, summary)
+            print(f"{job} {outcome}")
+            return 0 if state == "FINISH" else 1
+        if state == "PAUSE":
+            print(f"{job} paused: {summary['stage']}, error {summary['error']}; needs attention")
+            return 3
+        if time.monotonic() > deadline:
+            print("Stopped watching (timeout); the print continues")
+            return 0
+        report = session.wait_for(
+            lambda r, before=state: r.get("gcode_state") != before, args.interval * 60,
+        ) or session.report
+
+
+def _record_outcome(job: str, outcome: str, summary: dict[str, Any]) -> None:
+    """Fill in ``outcome`` on the version's print record for this job, if srw started it."""
+    version = job.split("-", 1)[0]
+    try:
+        updated = versions.update_print(
+            version, lambda r: r.get("printer_job") == job and r.get("outcome") == "started",
+            {"outcome": outcome, "ended": datetime.datetime.now().replace(microsecond=0)}
+            | ({"printer_error": summary["error"]} if summary["error"] else {}),
+        )
+    except ValueError:
+        return
+    if updated:
+        print(f"Recorded outcome {outcome!r} in {version}")
 
 
 def cmd_table(args: argparse.Namespace) -> None:
@@ -258,6 +397,36 @@ def parser() -> argparse.ArgumentParser:
     sub.add_argument("--date", help="YYYY-MM-DD (default today)")
     sub.add_argument("--material", help="e.g. 'Bambu PETG Basic, black'")
     sub.add_argument("--feedback", help="first impressions; edit the file for more")
+
+    sub = command("print", cmd_print, "Check the printer, upload the latest slice and start it (LAN Developer Mode)")
+    sub.add_argument("version")
+    sub.add_argument("--part", default="rest")
+    sub.add_argument("--spool", type=int, action="append",
+                     help="ams_mapping slot per filament: 4*unit+tray from 0, 254 external (default: match type)")
+    sub.add_argument("--dry-run", action="store_true", help="run the checks, send nothing")
+
+    sub = command("printer", cmd_printer, "Printer status, camera, light and job control over the LAN")
+    actions = sub.add_subparsers(dest="action", required=True, metavar="action")
+    sub_action = actions.add_parser("discover", help="list printers announcing themselves on the LAN")
+    sub_action.add_argument("--timeout", type=float, default=15)
+    sub_action = actions.add_parser("status", help="state, job progress, temperatures, spools, errors")
+    sub_action.add_argument("--json", action="store_true")
+    sub_action = actions.add_parser("snapshot", help="save a camera frame (default builds/printer/)")
+    sub_action.add_argument("-o", "--output", type=Path)
+    sub_action.add_argument("--no-light", dest="light", action="store_false",
+                            help="do not turn on the chamber light first")
+    actions.add_parser("pause", help="pause the current print")
+    actions.add_parser("resume", help="resume a paused print")
+    actions.add_parser("stop", help="cancel the current print")
+    sub_action = actions.add_parser("light", help="turn the chamber light on or off")
+    sub_action.add_argument("state", choices=["on", "off"])
+    sub_action = actions.add_parser(
+        "watch", help="follow the current print to its end; exit 0 finished, 1 failed, 3 paused, 4 idle",
+    )
+    sub_action.add_argument("--interval", type=float, default=10, help="minutes between status lines")
+    sub_action.add_argument("--snapshot-every", type=float, default=15,
+                            help="minutes between camera frames saved to builds/printer/<job>/ (0: none)")
+    sub_action.add_argument("--timeout", type=float, default=24, help="hours before giving up watching")
 
     sub = command("table", cmd_table, "Dataset of every version: parameters, pose, scores")
     sub.add_argument("versions", nargs="*")
