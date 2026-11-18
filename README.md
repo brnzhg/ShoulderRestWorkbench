@@ -70,9 +70,11 @@ srw table --varying -o builds/dataset.csv  # every version: parameters, pose, sc
 
 ## Slicing
 
-Slicing calls the Bambu Studio command line directly. It is already installed, matches the presets I print with in the GUI, and writes Bambu `.gcode.3mf` files the P1S prints as-is. The command line ignores preset inheritance, so the workbench flattens presets first and then checks every override against the sliced project's settings, which catches misspelled keys. [estampo](https://github.com/estampo/estampo) wraps OrcaSlicer in Docker with a TOML config of its own, which this repository's profiles and versions already cover. It does not send to printers either.
+Slicing calls the Bambu Studio command line directly. It is already installed, matches the presets I print with in the GUI, and writes Bambu `.gcode.3mf` files the P1S prints as-is. The command line ignores preset inheritance, so the workbench flattens presets first and then checks every override against the sliced project's settings, which catches misspelled keys. Each slice records the Bambu Studio version that made it.
 
-Sending is manual for now: `srw open` loads the slice in Bambu Studio, where the printer is already set up. A LAN-mode upload, for example with `bambulabs_api`, could replace that later.
+OrcaSlicer (alone or through [estampo](https://github.com/estampo/estampo), which runs it in Docker) would add little here and makes sending harder. Bambu's current firmware only takes jobs from third-party slicers through Bambu Connect, which has no Linux build, or in LAN-only Developer Mode, which cuts the printer off from Bambu's cloud. Bambu Studio sends natively.
+
+Sending is one click: `srw open` loads the slice in Bambu Studio, where the printer is already set up. Fully automatic sending would need LAN-only Developer Mode and a library such as `bambulabs_api`.
 
 ## Changing the library
 

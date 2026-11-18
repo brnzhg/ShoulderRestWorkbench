@@ -1639,6 +1639,7 @@ version = "0.1.0"
 source = { editable = "ShoulderRest" }
 dependencies = [
     { name = "build123d" },
+    { name = "numpy" },
 ]
 
 [package.optional-dependencies]
@@ -1649,6 +1650,7 @@ render = [
 [package.metadata]
 requires-dist = [
     { name = "build123d", specifier = ">=0.12.0" },
+    { name = "numpy", specifier = ">=2.5.3" },
     { name = "vtk", marker = "extra == 'render'", specifier = ">=9.7.2" },
 ]
 provides-extras = ["render"]

@@ -32,14 +32,14 @@ left_extend = 10
 [rest.head.left_cap]
 angle = 30
 height = 36
-depth = 30
-blend_radius = 6
+slope = 0
+blend = 6
 
 [rest.head.right_cap]
 angle = 24
 height = 26
-depth = 20
-blend_radius = 6
+slope = 0
+blend = 6
 
 [rest.tail]
 engraving = "{id}"

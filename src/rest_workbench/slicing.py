@@ -19,6 +19,7 @@ records the exact preset files it used next to its output.
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import tomllib
@@ -168,8 +169,8 @@ def slice_part(built: Build, part: str, profile: SlicerProfile) -> SliceResult:
         preset_files[kind] = work / f"{kind}.json"
         preset_files[kind].write_text(json.dumps(preset, indent=1))
 
-    version = built.manifest["version"]
-    output_name = f"{version}-{part}.gcode.3mf"
+    version_id = built.manifest["version"]
+    output_name = f"{version_id}-{part}.gcode.3mf"
     command = [
         *settings.slicer_command(),
         "--slice", "0", "--arrange", "1", "--orient", "0", "--allow-rotations",
@@ -190,10 +191,11 @@ def slice_part(built: Build, part: str, profile: SlicerProfile) -> SliceResult:
 
     plates = result.get("sliced_plates", [])
     summary = {
-        "version": version,
+        "version": version_id,
         "part": part,
         "copies": copies,
         "profile": profile.name,
+        "slicer_version": _slicer_version(output),
         "presets": profile.presets,
         "overrides": profile.overrides,
         "print_minutes": round(sum(p.get("main_predication", 0) for p in plates) / 60, 1),
@@ -206,6 +208,14 @@ def slice_part(built: Build, part: str, profile: SlicerProfile) -> SliceResult:
     }
     (work / "slice.json").write_text(json.dumps(summary, indent=2) + "\n")
     return SliceResult(part, profile.name, output, summary)
+
+
+def _slicer_version(output: Path) -> str:
+    """The application that wrote a sliced 3MF, such as BambuStudio-02.09.01.70."""
+    with zipfile.ZipFile(output) as archive:
+        model = archive.read("3D/3dmodel.model").decode(errors="replace")
+    match = re.search(r'name="Application">([^<]+)<', model)
+    return match.group(1) if match else "unknown"
 
 
 def latest_slice(built: Build, part: str) -> SliceResult | None:

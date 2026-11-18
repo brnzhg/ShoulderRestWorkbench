@@ -160,6 +160,7 @@ def cmd_printed(args: argparse.Namespace) -> None:
             record["slicer_profiles"] = [s.profile for s in found]
             record["gcode_sha256"] = [s.summary["sha256"][:16] for s in found]
             record["filament_g"] = round(sum(s.summary["filament_g"] for s in found), 1)
+            record["slicer_version"] = found[0].summary.get("slicer_version", "unknown")
     if args.material:
         record["material"] = args.material
     record["feedback"] = args.feedback or ""
