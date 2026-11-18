@@ -1,0 +1,11 @@
+# My shoulder scan, cleaned up in Blender (see the Planner note "Shoulder Scan Blender Cleanup").
+reference = "reference.step"   # cast surface, for display
+extended = "extended.step"     # cast grown away from the skin, for cutting rest bodies
+
+# Base point for fitted [placement] angles: a point on the cast, in the shoulder frame.
+placement_base = [-55, -87.5, 57.5]
+
+[cast_location]
+# Levels the scan in the shoulder frame (mm, degrees).
+position = [0, 0, 0]
+rotation = [30, 30, -5]

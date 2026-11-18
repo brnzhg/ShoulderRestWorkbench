@@ -1,0 +1,13 @@
+# Machine-local tool settings. Design data lives in versions/, shoulders/ and slicer/.
+
+[slicer]
+# Bambu Studio's command line, here the Flathub package.
+command = ["flatpak", "run", "--command=bambu-studio", "com.bambulab.BambuStudio"]
+gui = ["flatpak", "run", "com.bambulab.BambuStudio"]
+# System presets that slicer profiles name; Bambu Studio keeps them updated here.
+profiles = "~/.var/app/com.bambulab.BambuStudio/config/BambuStudio/system/BBL"
+
+[slicer.parts]
+# Default slicer profile (slicer/<name>.toml) for each printable group.
+rest = "petg-rest"
+legs = "petg-legs"

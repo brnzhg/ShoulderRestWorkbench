@@ -1,0 +1,3 @@
+[submodule "ShoulderRest"]
+	path = ShoulderRest
+	url = git@github.com:brnzhg/ShoulderRest.git

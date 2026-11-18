@@ -1,0 +1,14 @@
+# Python and local environments
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+
+# Generated builds, slices and renders (rebuildable from versions/ and recorded commits)
+builds/
+
+# Local editor and OS files
+.vscode/
+.idea/
+.DS_Store

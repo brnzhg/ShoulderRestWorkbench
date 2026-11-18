@@ -1,0 +1,49 @@
+summary = "Onshape Rest091126 / Rest4.1 / configuration 4S14, reconstructed"
+created = 2026-11-17
+notes = """
+Starting point reconstructed from the Onshape document
+https://cad.onshape.com/documents/2dfee749c754c98b8b01074a/w/047fdd36ce12f1f0e8f1fa58/e/f1f59ad224076e4bc4ef1241
+(reflected in X: Transform 1 is the right/head mount, Transform 2 the left/tail mount).
+Strokes and fractions are the reconstruction's computed values. The violin sits 12 mm higher
+than in Onshape. Adds the version-id engraving under the tail.
+"""
+shoulder = "scan-2026-09"
+
+[placement]
+# Fitted angles from the scan's placement_base (see rest_workbench.placement).
+angle = 16
+level = -3.5
+roll = 28
+offset = [7, -1, 12]
+
+[violin]
+attachment_offset = 6
+
+[rest]
+type = "w"
+right_fraction = 0.41019865   # leg centers near (95.23, 14) and (-93.02, 22)
+left_fraction = 0.45864359
+
+[rest.path]
+strokes = [[40.6171, 10], [59.9499, -20.9148], [36.5554, 10]]   # [length mm, angle deg]
+right_extend = 20.3085
+left_extend = 10
+
+[rest.head.left_cap]
+angle = 30
+height = 36
+depth = 30
+blend_radius = 6
+
+[rest.head.right_cap]
+angle = 24
+height = 26
+depth = 20
+blend_radius = 6
+
+[rest.tail]
+engraving = "{id}"
+
+[legs]
+type = "hinge"
+rod_retention = {}
